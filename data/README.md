@@ -47,15 +47,7 @@ gtfToGenePred -genePredExt $GTF_FILE genePred.tmp
 
 # now convert genePred to refFlat
 
-# move column 12 to column 1
-cut -f 12 genePred.tmp > genePred2.tmp
-cut --complement -f 12 genePred.tmp > genePred3.tmp
-rm genePred.tmp
-paste genePred2.tmp genePred3.tmp > genePred.tmp 
-rm genePred{2..3}.tmp
-
-# keep only the first 11 columns 
-cut -f 1-11 genePred.tmp > $REF_FLAT
+awk 'BEGIN{FS=OFS="\t"};{print $12, $1, $2,$3,$4,$5,$6,$7,$8,$9,$10}' genePred.tmp > $REF_FLAT
 rm genePred.tmp
 ```
 

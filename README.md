@@ -11,15 +11,15 @@ Sourced from MoTrPAC RNA-seq MOP: https://docs.google.com/document/d/1oz8jZAY9Rq
 
 This repository contains code to run all components of the MoTrPAC RNA-seq pipeline. The following software is required:
 
-* STAR 2.5 https://github.com/alexdobin/STAR  
-* Python 2.7. https://www.python.org/  
-* cutadapt 1.16 https://pypi.python.org/pypi/cutadapt  
-* Picard tools https://broadinstitute.github.io/picard/ and https://github.com/broadinstitute/picard  
-* Samtools http://www.htslib.org/   
-* RSEM v1.3.1 https://github.com/deweylab/RSEM/ (download link)   
-* MultiQC http://multiqc.info/  
-* bowtie2 http://bowtie-bio.sourceforge.net/bowtie2/index.shtml  
-* FastQC https://www.bioinformatics.babraham.ac.uk/projects/fastqc/. FastQC is a java-based tool. Please ensure that the correct version of java is installed.   
+* STAR 2.6.1b https://github.com/alexdobin/STAR  
+* Python 2.7 https://www.python.org/  
+* cutadapt 1.18 https://pypi.python.org/pypi/cutadapt  
+* Picard tools 2.18.16 https://broadinstitute.github.io/picard/ and https://github.com/broadinstitute/picard  
+* Samtools 1.3.1 http://www.htslib.org/   
+* RSEM 1.3.1 https://github.com/deweylab/RSEM/ (download link)   
+* MultiQC 1.6 http://multiqc.info/  
+* bowtie2 2.3.4.3 http://bowtie-bio.sourceforge.net/bowtie2/index.shtml  
+* FastQC 0.11.8 https://www.bioinformatics.babraham.ac.uk/projects/fastqc/. FastQC is a java-based tool. Please ensure that the correct version of java is installed.   
 
 ## Outline  
 
@@ -75,7 +75,7 @@ The following code assumes that the paired FASTQ files are named with the format
 for prefix in `ls ${FASTQ_DIR} | grep "fastq.gz" |  grep -v "_I1_" | grep -v "Undetermined" | sed "s/_R[0-9]_001\..*//" | uniq`; do 
 	r1=`ls ${FASTQ_DIR} | grep ${prefix} | grep "R1_001.fastq.gz"`
 	r2=`ls ${FASTQ_DIR} | grep ${prefix} | grep "R2_001.fastq.gz"`
-	fastqc -o ${OUTPUT_DIR} -t 12 -f fastq -a $ADAPTER_FILE 
+	fastqc -o ${OUTPUT_DIR} -t 12 -f fastq -a $ADAPTER_FILE ${r1} ${r2}
 done
 ```
 
@@ -281,9 +281,9 @@ done
 
 ### B.4.2 Count alignments by segment 
 
-Calculate the number of reads mapped to chromosomal, mitochondial, and contiguous regions. Note that these metrics have to be parsed differently for human and rat samples given their disparate GTF file formats. The following code will work if the BAM files followed from the workflow provided in this README.  
+Calculate the number of reads mapped to each genomic segment (chromosomes and contigs).  
 
-This section outputs a single file in `${INDIR}` called `merged.regional.read.counts.txt` with the following columns:  
+This section outputs a single file in `${INDIR}` called `${sample}.idxstats.log` with the following columns:  
 
 * `SAMPLE`: Prefix of ${PREFIX}\_Aligned.sortedByCoord.out.bam
 * `TOTAL_READS`: Total mapped reads
@@ -294,56 +294,31 @@ This section outputs a single file in `${INDIR}` called `merged.regional.read.co
 Parameters:  
 
 * `INDIR`: Directory containing ${SAMPLE}\_Aligned.sortedByChrom.out.bam files from step B.2  
-* `hs_sample`: An array of prefixes for human samples, e.g. `hs_sample=( HUMAN_PBMC_S1 HUMAN_PBMC_S2 HUMAN_MUSCLE_S3 )`, such that BAM files are named ${PREFIX}\_Aligned.sortedByCoord.out.bam
-* `rat_sample`: An array of prefixes for rat samples, e.g. `rat_sample=( RAT_LIVER_S1 RAT_GASTROC_S2 RAT_BLOOD_S3 )`, such that BAM files are named ${PREFIX}\_Aligned.sortedByCoord.out.bam
 
 ```bash
-echo "SAMPLE	TOTAL_READS	CHROM_READS	MITO_READS	CONTIG_READS" > ${INDIR}/merged.regional.read.counts.txt
-
-# only for human samples
-
-for sample in "${hs_sample[@]}"; do 
-
-	file=${sample}_Aligned.sortedByCoord.out.bam
-	
-	# get table of reads per segment
-	samtools view ${INDIR}/${file} | cut -f3 | sort | uniq -c > ${INDIR}/tmp.${sample}.read.cnts
-	# get total
-	total=`sed "s/^[ \t]*//" ${INDIR}/tmp.${sample}.read.cnts | cut -d' ' -f1 | awk '{total += $0} END{print total}'`
-	# get num chromosomal
-	chrom=`grep "chr[1-9XY]" ${INDIR}/tmp.${sample}.read.cnts | sed "s/^[ \t]*//" | cut -d' ' -f1 | awk '{total += $0} END{print total}'`
-	# get num mitochondrial
-	mito=`grep "chrM" ${INDIR}/tmp.${sample}.read.cnts | sed "s/^[ \t]*//" | cut -d' ' -f1 | awk '{total += $0} END{print total}'`
-	# get num on contigs
-	contig=`grep -v "chr" ${INDIR}/tmp.${sample}.read.cnts | sed "s/^[ \t]*//" | cut -d' ' -f1 | awk '{total += $0} END{print total}'`
-
-	echo "$sample	$total	$chrom	$mito	$contig" >> ${INDIR}/merged.regional.read.counts.txt
-
+INDIR=/mnt/lab_data/montgomery/nicolerg/motrpac/rna/aligned_bam
+mkdir -p ${INDIR}/idxstats
+for bam in `ls ${INDIR} | grep -E "Aligned.sortedByCoord.out.bam$"`; do 
+	# index 
+	samtools index ${INDIR}/$bam
+	# get summary
+	echo "seq_name	seq_length	n_mapped_reads	n_unmapped_reads" > ${INDIR}/idxstats/${sample}.idxstats.log 
+	samtools idxstats ${INDIR}/$bam >> ${INDIR}/idxstats/${sample}.idxstats.log
 done
-
-# only for rat samples
-
-for sample in "${rat_sample[@]}"; do 
-
-	file=${sample}_Aligned.sortedByCoord.out.bam
-
-	# get table of reads per chromosome
-	samtools view ${indir}/${file} | cut -f3 | sort | uniq -c > ${INDIR}/tmp.${sample}.read.cnts
-	# get total
-	total=`sed "s/^[ \t]*//" ${INDIR}/tmp.${sample}.read.cnts | cut -d' ' -f1 | awk '{total += $0} END{print total}'`
-	# get num chromosomal
-	head -20 ${INDIR}/tmp.${sample}.read.cnts > ${INDIR}/tmp.${sample}.chrom
-	tail -2 ${INDIR}/tmp.${sample}.read.cnts >> ${INDIR}/tmp.${sample}.chrom
-	chrom=`sed "s/^[ \t]*//" ${INDIR}/tmp.${sample}.chrom | cut -d' ' -f1 | awk '{total += $0} END{print total}'`
-	# get num mitochondrial
-	mito=`grep -E " MT$" ${INDIR}/tmp.${sample}.read.cnts | sed "s/^[ \t]*//" | cut -d' ' -f1 | awk '{total += $0} END{print total}'`
-	# get num on contigs
-	contig=`tail -n +21 ${INDIR}/tmp.${sample}.read.cnts | head -n -3 | sed "s/^[ \t]*//" | cut -d' ' -f1 | awk '{total += $0} END{print total}'`
-	echo "$sample	$total	$chrom	$mito	$contig" >> ${INDIR}/merged.regional.read.counts.txt
-
+first=1
+# summarize in one file 
+for log in `ls ${INDIR}/idxstats | grep "idxstats.log"`; do 
+	if [ "$first" == 1 ]; then 
+		cut -f 1,2 ${INDIR}/idxstats/${log} > ${INDIR}/idxstats/tmp1
+		first=0
+	fi
+	sample_prefix=`echo ${log} | sed "s/\.idxstats\.log//"`
+	cut -f 3 ${INDIR}/idxstats/${log} | sed "1 s/^.*$/$sample_prefix/" > ${INDIR}/idxstats/tmp2
+	paste ${INDIR}/idxstats/tmp1 ${INDIR}/idxstats/tmp2 > ${INDIR}/idxstats/tmp3
+	rm ${INDIR}/idxstats/tmp1 ${INDIR}/idxstats/tmp2
+	mv ${INDIR}/idxstats/tmp3 ${INDIR}/idxstats/tmp1
 done
-
-rm ${INDIR}/tmp* # remove temporary files created in intermediate steps
+mv ${INDIR}/idxstats/tmp1 ${INDIR}/idxstats/idxstats.merged.log 
 ```
 
 ### B.4.3 Calculate % contamininants (rRNA and globin)
