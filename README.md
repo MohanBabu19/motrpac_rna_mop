@@ -1,4 +1,8 @@
 # MoTrPAC RNA-seq pipeline
+
+**NOTE:** (31 Jan 19) This MOP is currently outdated. Refer to the most recent version of the MoTrPAC RNA-seq MOP, which implements the pipeline available here: https://github.com/yongchao/motrpac_rnaseq
+
+
 **Contact:** Nicole Gay (nicolerg@stanford.edu), Brunilda Balliu (bballiu@stanford.edu), Laure Fresard (lfresard@stanford.edu)
 
 Sourced from MoTrPAC RNA-seq MOP: https://docs.google.com/document/d/1oz8jZAY9Rq4uqenp-0RMkQBhMtjsMLKlxfjlmRExSQ0/edit?ts=5b04a52e#  
@@ -75,7 +79,7 @@ The following code assumes that the paired FASTQ files are named with the format
 for prefix in `ls ${FASTQ_DIR} | grep "fastq.gz" |  grep -v "_I1_" | grep -v "Undetermined" | sed "s/_R[0-9]_001\..*//" | uniq`; do 
 	r1=`ls ${FASTQ_DIR} | grep ${prefix} | grep "R1_001.fastq.gz"`
 	r2=`ls ${FASTQ_DIR} | grep ${prefix} | grep "R2_001.fastq.gz"`
-	fastqc -o ${OUTPUT_DIR} -t 12 -f fastq -a $ADAPTER_FILE ${r1} ${r2}
+	fastqc -o ${OUTPUT_DIR} -t 12 -f fastq -a $ADAPTER_FILE ${FASTQ_DIR}/${r1} ${FASTQ_DIR}/${r2}
 done
 ```
 
